@@ -8,7 +8,10 @@ import {
   FolderOpen,
   Activity,
   Menu,
-  X
+  X,
+  Search,
+  Bell,
+  Settings
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -17,11 +20,36 @@ interface LayoutProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: BarChart3 },
-  { name: 'Network', href: '/network', icon: Network },
-  { name: 'Collections', href: '/collections', icon: FolderOpen },
-  { name: 'Papers', href: '/papers', icon: FileText },
-  { name: 'Authors', href: '/authors', icon: Users },
+  { 
+    name: 'Dashboard', 
+    href: '/', 
+    icon: BarChart3,
+    description: 'Overview & analytics'
+  },
+  { 
+    name: 'Network', 
+    href: '/network', 
+    icon: Network,
+    description: 'Collaboration graphs'
+  },
+  { 
+    name: 'Collections', 
+    href: '/collections', 
+    icon: FolderOpen,
+    description: 'Manage paper sets'
+  },
+  { 
+    name: 'Papers', 
+    href: '/papers', 
+    icon: FileText,
+    description: 'Browse research'
+  },
+  { 
+    name: 'Authors', 
+    href: '/authors', 
+    icon: Users,
+    description: 'Researcher profiles'
+  },
 ];
 
 export function Layout({ children }: LayoutProps) {
@@ -29,91 +57,164 @@ export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-mesh">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="modal-backdrop md:hidden" 
+          onClick={() => setSidebarOpen(false)} 
+        />
+      )}
+
       {/* Mobile sidebar */}
-      <div className={`fixed inset-0 flex z-40 md:hidden ${sidebarOpen ? '' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
-          <div className="absolute top-0 right-0 -mr-12 pt-2">
+      <div className={`fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-out md:hidden ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="flex h-full flex-col bg-white/95 backdrop-blur-lg shadow-hard">
+          {/* Mobile header */}
+          <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200/50">
+            <div className="flex items-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 shadow-soft">
+                <Activity className="h-6 w-6 text-white" />
+              </div>
+              <div className="ml-3">
+                <h1 className="text-lg font-bold text-gradient">Paper Graph</h1>
+                <p className="text-xs text-gray-500">Research Analytics</p>
+              </div>
+            </div>
             <button
-              className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
               onClick={() => setSidebarOpen(false)}
+              className="btn-icon"
             >
-              <X className="h-6 w-6 text-white" />
+              <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
-            <div className="flex-shrink-0 flex items-center px-4">
-              <Activity className="h-8 w-8 text-primary-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Paper Graph</span>
+
+          {/* Mobile navigation */}
+          <nav className="flex-1 px-4 py-6 space-y-2">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`${isActive ? 'nav-link-active' : 'nav-link-inactive'} group`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <item.icon className="h-5 w-5 mr-3 flex-shrink-0 transition-transform group-hover:scale-110" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="text-xs opacity-75 truncate">{item.description}</div>
+                  </div>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Mobile footer */}
+          <div className="p-4 border-t border-gray-200/50">
+            <div className="flex items-center space-x-3">
+              <button className="btn-icon">
+                <Bell className="h-4 w-4" />
+              </button>
+              <button className="btn-icon">
+                <Settings className="h-4 w-4" />
+              </button>
             </div>
-            <nav className="mt-5 px-2 space-y-1">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`group flex items-center px-2 py-2 text-base font-medium rounded-md ${
-                      isActive
-                        ? 'bg-primary-100 text-primary-900'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <item.icon className={`mr-4 h-6 w-6 ${isActive ? 'text-primary-600' : 'text-gray-400'}`} />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </nav>
           </div>
         </div>
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-        <div className="flex-1 flex flex-col min-h-0 border-r border-gray-200 bg-white">
-          <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-            <div className="flex items-center flex-shrink-0 px-4">
-              <Activity className="h-8 w-8 text-primary-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Paper Graph</span>
+      <div className="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-30">
+        <div className="flex flex-col flex-1 min-h-0 bg-white/80 backdrop-blur-lg border-r border-white/30 shadow-soft">
+          {/* Desktop header */}
+          <div className="flex items-center h-20 px-6 border-b border-gray-200/50">
+            <div className="flex items-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 shadow-soft">
+                <Activity className="h-7 w-7 text-white" />
+              </div>
+              <div className="ml-4">
+                <h1 className="text-xl font-bold text-gradient">Paper Graph</h1>
+                <p className="text-sm text-gray-500">Research Analytics Platform</p>
+              </div>
             </div>
-            <nav className="mt-5 flex-1 px-2 space-y-1">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                      isActive
-                        ? 'bg-primary-100 text-primary-900'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-primary-600' : 'text-gray-400'}`} />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </nav>
+          </div>
+
+          {/* Desktop navigation */}
+          <nav className="flex-1 px-6 py-8 space-y-3">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`${isActive ? 'nav-link-active' : 'nav-link-inactive'} group`}
+                >
+                  <item.icon className="h-5 w-5 mr-4 flex-shrink-0 transition-transform group-hover:scale-110" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">{item.name}</div>
+                    <div className="text-xs opacity-75 mt-0.5">{item.description}</div>
+                  </div>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Desktop footer */}
+          <div className="p-6 border-t border-gray-200/50">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-gray-500">
+                v1.0.0 • Built with ❤️
+              </div>
+              <div className="flex items-center space-x-2">
+                <button className="btn-icon">
+                  <Bell className="h-4 w-4" />
+                </button>
+                <button className="btn-icon">
+                  <Settings className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="md:pl-64 flex flex-col flex-1">
-        <div className="sticky top-0 z-10 md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-gray-50">
-          <button
-            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-          </button>
+      {/* Main content area */}
+      <div className="md:pl-72 flex flex-col min-h-screen">
+        {/* Mobile top bar */}
+        <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-lg border-b border-white/30 shadow-soft md:hidden">
+          <div className="flex items-center justify-between h-16 px-4">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="btn-icon"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            
+            <div className="flex items-center">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-purple-600">
+                <Activity className="h-5 w-5 text-white" />
+              </div>
+              <span className="ml-2 font-bold text-gradient">Paper Graph</span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button className="btn-icon">
+                <Search className="h-5 w-5" />
+              </button>
+              <button className="btn-icon">
+                <Bell className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         </div>
-        <main className="flex-1">
-          {children}
+
+        {/* Main content */}
+        <main className="flex-1 relative">
+          <div className="animate-fade-in">
+            {children}
+          </div>
         </main>
       </div>
     </div>
