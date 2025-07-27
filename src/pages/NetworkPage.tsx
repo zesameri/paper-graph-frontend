@@ -1,314 +1,343 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
-import ForceGraph2D from 'react-force-graph-2d';
+import { mockNetworkData, mockCollections } from '../lib/mockData';
 import { 
-  Download, 
   Filter,
+  Download,
+  BarChart3,
   Users,
-  FileText
+  Network,
+  Zap,
+  Target,
+  Eye,
+  WifiOff,
+  Wifi
 } from 'lucide-react';
-import type { NetworkNode, NetworkLink } from '../types/api';
+import type { NetworkNode } from '../types/api';
 
 export function NetworkPage() {
-  const [filters, setFilters] = useState({
-    collection_id: '',
-    min_collaborations: 1,
-    include_citations: false,
-  });
-  const [selectedNode, setSelectedNode] = useState<NetworkNode | null>(null);
-  const [graphData, setGraphData] = useState<{ nodes: NetworkNode[]; links: NetworkLink[] }>({ nodes: [], links: [] });
-  const [showFilters, setShowFilters] = useState(false);
+  const [selectedCollection, setSelectedCollection] = useState('');
+  const [minCollaborations, setMinCollaborations] = useState(1);
+  const [includeCitations, setIncludeCitations] = useState(false);
+  const [selectedNode] = useState<NetworkNode | null>(null);
 
-  const { data: networkData, isLoading, error } = useQuery({
-    queryKey: ['network-analysis', filters],
-    queryFn: () => apiClient.getNetworkAnalysis(filters),
-    enabled: true,
+  const { data: networkData, isLoading: networkLoading, error: networkError } = useQuery({
+    queryKey: ['network-analysis', selectedCollection, minCollaborations, includeCitations],
+    queryFn: () => apiClient.getNetworkAnalysis({
+      collection_id: selectedCollection,
+      min_collaborations: minCollaborations,
+      include_citations: includeCitations
+    }),
+    retry: 1,
   });
 
-  const { data: collections } = useQuery({
-    queryKey: ['collections-for-filter'],
+  const { data: collections, isLoading: collectionsLoading, error: collectionsError } = useQuery({
+    queryKey: ['collections'],
     queryFn: () => apiClient.getCollections({ limit: 100 }),
+    retry: 1,
   });
 
-  // Update graph data when network data changes
-  useEffect(() => {
-    if (networkData) {
-      setGraphData({
-        nodes: networkData.nodes.map(node => ({
-          ...node,
-          val: node.value || 1,
-          color: node.type === 'author' ? '#3b82f6' : '#10b981',
-        })),
-        links: networkData.links.map(link => ({
-          ...link,
-          color: link.type === 'collaboration' ? '#6366f1' : '#f59e0b',
-        })),
-      });
-    }
-  }, [networkData]);
+  // Use mock data if API fails
+  const displayNetworkData = networkData || (networkError ? mockNetworkData : null);
+  const displayCollections = collections?.results || (collectionsError ? mockCollections : []);
+  const isUsingMockData = (!networkData && networkError) || (!collections && collectionsError);
 
-  const handleNodeClick = useCallback((node: NetworkNode) => {
-    setSelectedNode(node);
-  }, []);
-
-  const handleNodeHover = useCallback(() => {
-    // Optional: Add hover effects
-  }, []);
-
-  const exportNetwork = async () => {
-    try {
-      const blob = await apiClient.exportNetwork({
-        format: 'json',
-        filters,
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'network-data.json';
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
+  const handleExport = () => {
+    if (displayNetworkData) {
+      const dataStr = JSON.stringify(displayNetworkData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'network-analysis.json';
+      link.click();
+      URL.revokeObjectURL(url);
     }
   };
 
-  if (isLoading) {
+  if (networkLoading || collectionsLoading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading network data...</p>
+      <div className="p-8">
+        <div className="space-y-8">
+          {/* Header Skeleton */}
+          <div className="space-y-2">
+            <div className="skeleton h-8 w-64"></div>
+            <div className="skeleton h-5 w-96"></div>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">Failed to load network data. Please try again.</p>
+          
+          {/* Controls Skeleton */}
+          <div className="card p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="skeleton h-4 w-24"></div>
+                  <div className="skeleton h-10 w-full"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Network Graph Skeleton */}
+          <div className="card">
+            <div className="skeleton h-96 w-full"></div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Network Visualization</h1>
-          <p className="text-gray-600">Interactive graph of author collaborations and paper citations</p>
-        </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="btn-secondary flex items-center"
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </button>
-          <button
-            onClick={exportNetwork}
-            className="btn-primary flex items-center"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </button>
-        </div>
-      </div>
-
-      {/* Filters Panel */}
-      {showFilters && (
-        <div className="mb-6 card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Network Filters</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Collection
-              </label>
-              <select
-                value={filters.collection_id}
-                onChange={(e) => setFilters({ ...filters, collection_id: e.target.value })}
-                className="input-field"
-              >
-                <option value="">All Collections</option>
-                {collections?.results.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Min Collaborations
-              </label>
-              <input
-                type="number"
-                value={filters.min_collaborations}
-                onChange={(e) => setFilters({ ...filters, min_collaborations: parseInt(e.target.value) || 1 })}
-                className="input-field"
-                min="1"
-              />
-            </div>
-            <div className="flex items-center">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.include_citations}
-                  onChange={(e) => setFilters({ ...filters, include_citations: e.target.checked })}
-                  className="mr-2"
-                />
-                Include Citations
-              </label>
-            </div>
+    <div className="p-8 space-y-8">
+      {/* Demo Mode Banner */}
+      {isUsingMockData && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex items-center space-x-3">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-soft">
+            <WifiOff className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-amber-800">Demo Mode</h3>
+            <p className="text-sm text-amber-700">
+              API is not available, showing sample network data to demonstrate the interface.
+            </p>
+          </div>
+          <div className="flex items-center text-xs text-amber-600">
+            <Wifi className="h-4 w-4 mr-1" />
+            Mock Data
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Graph Container */}
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+            <Network className="h-8 w-8 text-primary-500 mr-3" />
+            Network Analysis
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Explore author collaborations and research connections through interactive network visualization.
+          </p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={handleExport}
+            className="btn-secondary flex items-center"
+            disabled={!displayNetworkData}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </button>
+          <button className="btn-primary flex items-center">
+            <Target className="h-4 w-4 mr-2" />
+            Analyze
+          </button>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="card">
+        <div className="flex items-center mb-6">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center mr-4 shadow-soft">
+            <Filter className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Network Controls</h2>
+            <p className="text-sm text-gray-500">Configure network visualization parameters</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Collection Filter
+            </label>
+            <select
+              value={selectedCollection}
+              onChange={(e) => setSelectedCollection(e.target.value)}
+              className="select-field"
+            >
+              <option value="">All Collections</option>
+              {displayCollections.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {collection.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Min Collaborations
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={minCollaborations}
+              onChange={(e) => setMinCollaborations(parseInt(e.target.value) || 1)}
+              className="input-field"
+            />
+          </div>
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="includeCitations"
+              checked={includeCitations}
+              onChange={(e) => setIncludeCitations(e.target.checked)}
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label htmlFor="includeCitations" className="ml-3 text-sm font-medium text-gray-700">
+              Include citation links
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Network Stats */}
+      {displayNetworkData?.metadata && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="stat-card">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center mx-auto mb-4 shadow-soft">
+              <Users className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="stat-value">{displayNetworkData.metadata.total_nodes}</div>
+            <div className="stat-label">Nodes</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-4 shadow-soft">
+              <Network className="h-6 w-6 text-emerald-600" />
+            </div>
+            <div className="stat-value">{displayNetworkData.metadata.total_links}</div>
+            <div className="stat-label">Connections</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center mx-auto mb-4 shadow-soft">
+              <Target className="h-6 w-6 text-purple-600" />
+            </div>
+            <div className="stat-value">{displayNetworkData.metadata.total_clusters}</div>
+            <div className="stat-label">Clusters</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center mx-auto mb-4 shadow-soft">
+              <BarChart3 className="h-6 w-6 text-amber-600" />
+            </div>
+            <div className="stat-value">{(displayNetworkData.metadata.network_density * 100).toFixed(1)}%</div>
+            <div className="stat-label">Density</div>
+          </div>
+        </div>
+      )}
+
+      {/* Network Visualization */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3">
           <div className="card p-0 overflow-hidden">
-            <div className="h-96 lg:h-[600px] bg-gray-50">
-              {graphData.nodes.length > 0 ? (
-                <ForceGraph2D
-                  graphData={graphData}
-                  nodeId="id"
-                  nodeLabel="name"
-                  nodeAutoColorBy="type"
-                  linkSource="source"
-                  linkTarget="target"
-                  linkWidth={(link: any) => Math.sqrt(link.value || 1)} // eslint-disable-line @typescript-eslint/no-explicit-any
-                  linkDirectionalParticles={2}
-                  linkDirectionalParticleWidth={2}
-                  onNodeClick={handleNodeClick}
-                  onNodeHover={handleNodeHover}
-                  width={800}
-                  height={600}
-                  backgroundColor="#f9fafb"
-                  linkColor={() => 'rgba(99, 102, 241, 0.6)'}
-                  nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-                    const label = node.name;
-                    const fontSize = 12 / globalScale;
-                    ctx.font = `${fontSize}px Sans-Serif`;
-                    
-                    // Draw node
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, node.val || 4, 0, 2 * Math.PI, false);
-                    ctx.fillStyle = node.type === 'author' ? '#3b82f6' : '#10b981';
-                    ctx.fill();
-                    
-                    // Draw label
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'top';
-                    ctx.fillStyle = '#374151';
-                    ctx.fillText(label, node.x, node.y + (node.val || 4) + 1);
-                  }}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No network data</h3>
-                    <p className="text-gray-600">Collect some papers first to see collaboration networks</p>
+            <div className="network-container h-96">
+              {/* Placeholder for Network Visualization */}
+              <div className="flex items-center justify-center h-full bg-gradient-to-br from-blue-50 to-purple-50">
+                <div className="text-center">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-glow">
+                    <Network className="h-10 w-10 text-white" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">Interactive Network Graph</h3>
+                  <p className="text-gray-600 max-w-md">
+                    Network visualization will appear here once the graph library is properly configured.
+                  </p>
+                  <div className="mt-6 grid grid-cols-3 gap-4 max-w-xs mx-auto">
+                    <div className="text-center">
+                      <div className="w-8 h-8 rounded-full bg-blue-500 mx-auto mb-2"></div>
+                      <div className="text-xs text-gray-500">AI/ML</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 rounded-full bg-purple-500 mx-auto mb-2"></div>
+                      <div className="text-xs text-gray-500">Quantum</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500 mx-auto mb-2"></div>
+                      <div className="text-xs text-gray-500">Healthcare</div>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Side Panel */}
-        <div className="space-y-6">
-          {/* Network Stats */}
+        {/* Node Details Sidebar */}
+        <div className="lg:col-span-1">
           <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Network Stats</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Nodes:</span>
-                <span className="font-medium">{graphData.nodes.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Links:</span>
-                <span className="font-medium">{graphData.links.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Authors:</span>
-                <span className="font-medium">
-                  {graphData.nodes.filter(n => n.type === 'author').length}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Papers:</span>
-                <span className="font-medium">
-                  {graphData.nodes.filter(n => n.type === 'paper').length}
-                </span>
-              </div>
+            <div className="flex items-center mb-4">
+              <Eye className="h-5 w-5 text-gray-600 mr-2" />
+              <h3 className="text-lg font-semibold text-gray-900">Node Details</h3>
             </div>
+            
+            {selectedNode ? (
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">{selectedNode.name}</h4>
+                  <p className="text-sm text-gray-600">{selectedNode.affiliation}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {selectedNode.papers_count || 0}
+                    </div>
+                    <div className="text-xs text-gray-500">Papers</div>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {selectedNode.citation_count || 0}
+                    </div>
+                    <div className="text-xs text-gray-500">Citations</div>
+                  </div>
+                </div>
+                
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-600">
+                    <strong>Type:</strong> {selectedNode.type || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gray-100 flex items-center justify-center">
+                  <Target className="h-6 w-6 text-gray-400" />
+                </div>
+                <p className="text-sm text-gray-500">Click on a node to see details</p>
+              </div>
+            )}
           </div>
-
+          
           {/* Legend */}
-          <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Legend</h3>
+          <div className="card mt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Zap className="h-5 w-5 text-gray-600 mr-2" />
+              Legend
+            </h3>
+            
             <div className="space-y-3">
               <div className="flex items-center">
                 <div className="w-4 h-4 rounded-full bg-blue-500 mr-3"></div>
-                <span className="text-sm text-gray-600">Authors</span>
+                <span className="text-sm text-gray-700">AI/ML Research</span>
               </div>
               <div className="flex items-center">
-                <div className="w-4 h-4 rounded-full bg-green-500 mr-3"></div>
-                <span className="text-sm text-gray-600">Papers</span>
+                <div className="w-4 h-4 rounded-full bg-purple-500 mr-3"></div>
+                <span className="text-sm text-gray-700">Quantum Computing</span>
               </div>
               <div className="flex items-center">
-                <div className="w-8 h-0.5 bg-indigo-500 mr-3"></div>
-                <span className="text-sm text-gray-600">Collaborations</span>
+                <div className="w-4 h-4 rounded-full bg-emerald-500 mr-3"></div>
+                <span className="text-sm text-gray-700">Healthcare AI</span>
               </div>
               <div className="flex items-center">
-                <div className="w-8 h-0.5 bg-amber-500 mr-3"></div>
-                <span className="text-sm text-gray-600">Citations</span>
+                <div className="w-1 h-1 bg-gray-300 mr-3 rounded-full"></div>
+                <span className="text-xs text-gray-500">Link thickness = collaboration strength</span>
               </div>
             </div>
           </div>
-
-          {/* Selected Node Info */}
-          {selectedNode && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Node Details</h3>
-              <div className="space-y-2">
-                <div className="flex items-center">
-                  {selectedNode.type === 'author' ? (
-                    <Users className="h-4 w-4 text-blue-500 mr-2" />
-                  ) : (
-                    <FileText className="h-4 w-4 text-green-500 mr-2" />
-                  )}
-                  <span className="font-medium">{selectedNode.name}</span>
-                </div>
-                <div className="text-sm text-gray-600">
-                  Type: {selectedNode.type}
-                </div>
-                {selectedNode.papers_count && (
-                  <div className="text-sm text-gray-600">
-                    Papers: {selectedNode.papers_count}
-                  </div>
-                )}
-                {selectedNode.citation_count && (
-                  <div className="text-sm text-gray-600">
-                    Citations: {selectedNode.citation_count}
-                  </div>
-                )}
-                {selectedNode.affiliation && (
-                  <div className="text-sm text-gray-600">
-                    Affiliation: {selectedNode.affiliation}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
